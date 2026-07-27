@@ -18,8 +18,9 @@ class GregBot(commands.Bot):
         self.add_check(self.only_me())
 
     def only_me(self):
+        authors = [627465945522241555, 575710766787985435]
         async def predicate(ctx):
-            return ctx.author.id == 627465945522241555
+            return ctx.author.id in authors
         return predicate
 
     async def setup_hook(self):
