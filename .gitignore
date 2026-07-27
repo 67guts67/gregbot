@@ -1,0 +1,21 @@
+# Python cache
+__pycache__/
+__pycache__
+*.py[cod]
+*$py.class
+*.pyc
+
+# Environment
+*.env
+*.venv
+venv
+
+# IDE
+*.idea
+*.vscode
+
+# OS
+.DS_Store
+Thumbs.db
+
+gregbot_system.txt
