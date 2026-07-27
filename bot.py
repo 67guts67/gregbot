@@ -15,6 +15,12 @@ class GregBot(commands.Bot):
         super().__init__(**kwargs)
         self.quote_cache = QuoteCache()
         self.http_session: aiohttp.ClientSession | None = None
+        self.add_check(self.only_me())
+
+    def only_me(self):
+        async def predicate(ctx):
+            return ctx.author.id == 627465945522241555
+        return predicate
 
     async def setup_hook(self):
         self.http_session = aiohttp.ClientSession(
@@ -43,7 +49,7 @@ intents.members = True
 
 
 bot = GregBot(
-    command_prefix=";",
+    command_prefix="'",
     intents=intents
 )
-bot.token = os.getenv("TOKEN")
+bot.token = os.getenv("TOKEN2")
