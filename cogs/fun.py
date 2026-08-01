@@ -1,17 +1,34 @@
 import discord
 from discord.ext import commands
+from discord import app_commands
 
+from bot import bot
 
 class Fun(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command(help="Get a random quote from the #quotes channel.")
-    async def rquote(self, ctx):
-        if not self.bot.quote_cache.loaded:
-            await ctx.send("No quotes cached.")
+    fun = app_commands.Group(
+        name="fun",
+        description="...",
+    )
+
+    @fun.command(name="meowl", description="Post Meowl GIF.")
+    async def meowl(self, interaction: discord.Interaction):
+        await interaction.response.send_message("https://klipy.com/gifs/meowl-cat-5")
+
+        try:
+            await interaction.channel.send("Yes, this is real!")
+        except Exception as e:
+            print(e)
+
+    @fun.command(name="rquote", description="Get a random quote from the #quotes channel.")
+    async def rquote(self, interaction: discord.Interaction):
+        if not bot.quote_cache.loaded:
+            await interaction.response.send_message(f"No quotes cached.")
             return
-        message = self.bot.quote_cache.random()
+
+        message = bot.quote_cache.random()
 
         content = message.content
 
@@ -23,31 +40,24 @@ class Fun(commands.Cog):
             )
 
         if not content:
-            await ctx.send("Selected message has no content.")
+            await interaction.response.send_message("Selected message has no content.")
             return
 
         content += f"\n\n-# Original: {message.jump_url}"
 
-        await ctx.send(
-            content[:2000],
-            allowed_mentions=discord.AllowedMentions.none()
+        await interaction.response.send_message(
+            content[:2000]
         )
-
-    @commands.command(help="Post Meowl GIF.")
-    async def meowl(self, ctx):
-        await ctx.send('https://klipy.com/gifs/meowl-cat-5')
-        await ctx.send('Yes, this is real.')
-
-    @commands.command(help="Respond with 'Yes, this is fake.'")
-    async def fake(self, ctx):
-        await ctx.message.delete(delay=1)
-        await ctx.send('Yes, this is fake.')
 
     @commands.command(help="Respond with 'Yes, this is real.'")
     async def real(self, ctx):
         await ctx.message.delete(delay=1)
         await ctx.send('Yes, this is real.')
 
+    @commands.command(help="Respond with 'Yes, this is fake.'")
+    async def fake(self, ctx):
+        await ctx.message.delete(delay=1)
+        await ctx.send('Yes, this is fake.')
 
 async def setup(bot):
     await bot.add_cog(Fun(bot))

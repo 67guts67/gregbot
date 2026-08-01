@@ -4,7 +4,6 @@ import asyncio
 
 from services.gemini import ask_gemini
 
-
 class Ai(commands.Cog):
 
     def __init__(self, bot):
@@ -60,7 +59,6 @@ class Ai(commands.Cog):
         except Exception as e:
             print(e, flush=True)
             await ctx.send("Some error occured, try again later.")
-
 
 async def setup(bot):
     await bot.add_cog(Ai(bot))

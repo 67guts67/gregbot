@@ -31,3 +31,7 @@ BASE_URL = "https://tiss.tuwien.ac.at"
 PSEARCH = "/api/person/v23/psuche"
 
 CSEARCH = "/api/course/lecturer/"
+
+SEMESTER_MATCH = re.compile(
+    r"\d{4}([WS])$"
+)

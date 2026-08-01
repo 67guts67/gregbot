@@ -2,6 +2,9 @@ import asyncio
 
 import discord
 from discord.ext import commands
+from discord import app_commands
+
+from config import SEMESTER_MATCH
 
 from services.tiss import tiss_psearch, clean_html, tiss_csearch, build_picture_url, tiss_course, \
     tiss_exam_dates, format_exam_block, truncate
@@ -11,17 +14,24 @@ class Tiss(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command(help="Search a person per TISS")
-    async def psearch(self, ctx, *, person: str = None):
+    tiss = app_commands.Group(
+        name="tiss",
+        description="..."
+    )
+
+    @tiss.command(name="psearch", description="Search a person per TISS.")
+    @app_commands.describe(person="The name of the person")
+    async def psearch(self, interaction: discord.Interaction, person: str):
+        await interaction.response.defer()
 
         if person is None:
-            await ctx.send("No person provided.")
+            await interaction.followup.send("No person provided.")
             return
 
         query = person
         person = await tiss_psearch(self.bot.http_session, query)
         if person is None:
-            await ctx.send(f"No person found matching `{query}`.")
+            await interaction.followup.send(f"No person found matching `{query}`.")
             return
 
         embed = discord.Embed(
@@ -84,27 +94,19 @@ class Tiss(commands.Cog):
             text=f"TISS ID: {person['tiss_id']}"
         )
 
-        await ctx.send(embed=embed)
+        await interaction.followup.send(embed=embed)
 
-    @commands.command(help="Search courses per TISS. Usage: ^csearch <oid|name> <semester>")
-    async def csearch(self, ctx, *, args: str = None):
-        if not args:
-            await ctx.send(
-                "Usage: `^csearch <oid|name> <semester>`\n"
-                "Example: `^csearch 1113253 2026S` or `^csearch Franz Puntigam 2026S`"
-            )
+    @tiss.command(description="Search courses per TISS.")
+    @app_commands.describe(course="The name|oid of the course - Example: 1113253 or Franz Puntigam")
+    @app_commands.describe(semester="The semester of the course - Example: 2026S")
+    async def csearch(self, interaction: discord.Interaction, course: str, semester: str):
+        if not SEMESTER_MATCH.match(semester):
+            await interaction.response.send_message("Invalid semester.")
             return
 
-        parts = args.rsplit(" ", 1)
-        if len(parts) != 2:
-            await ctx.send(
-                "Usage: `^csearch <oid|name> <semester>`\n"
-                "Example: `^csearch 1113253 2026S` or `^csearch Franz Puntigam 2026S`"
-            )
-            return
+        await interaction.response.defer()
 
-        target, semester = parts
-        target = target.strip()
+        target = course
 
         person = None
 
@@ -113,14 +115,14 @@ class Tiss(commands.Cog):
         else:
             person = await tiss_psearch(self.bot.http_session, target)
             if person is None:
-                await ctx.send(f"No lecturer found matching `{target}`.")
+                await interaction.followup.send(f"No lecturer found matching `{target}`.")
                 return
             oid = person["oid"]
 
         courses = await tiss_csearch(self.bot.http_session, oid, semester)
 
         if not courses:
-            await ctx.send(f"No courses found for `{target}` in semester `{semester}`.")
+            await interaction.followup.send(f"No courses found for `{target}` in semester `{semester}`.")
             return
 
         display_name = f"{person['first_name']} {person['last_name']}" if person else str(oid)
@@ -149,13 +151,17 @@ class Tiss(commands.Cog):
         if len(courses) > MAX_FIELDS:
             embed.set_footer(text=f"Showing {MAX_FIELDS} of {len(courses)} courses")
 
-        await ctx.send(embed=embed)
+        await interaction.followup.send(embed=embed)
 
-    @commands.command(help="Get course details and exam dates. Usage: ^course <number> <semester>")
-    async def course(self, ctx, number: str = None, semester: str = None):
-        if not number or not semester:
-            await ctx.send("Usage: `^course <number> <semester>`\nExample: `^course 192134 2026W`")
+    @tiss.command(name="course", description="Get course details and exam dates.")
+    @app_commands.describe(number="The course number - Example: 192134")
+    @app_commands.describe(semester="The semester - Example: 2026W")
+    async def course(self, interaction: discord.Interaction, number: str, semester: str):
+        if not SEMESTER_MATCH.match(semester):
+            await interaction.response.send_message("Invalid semester.")
             return
+
+        await interaction.response.defer()
 
         course_info, exam_dates = await asyncio.gather(
             tiss_course(self.bot.http_session, number, semester),
@@ -163,7 +169,7 @@ class Tiss(commands.Cog):
         )
 
         if course_info is None:
-            await ctx.send(f"No course found for `{number}` in semester `{semester}`.")
+            await interaction.followup.send(f"No course found for `{number}` in semester `{semester}`.")
             return
 
         embed = discord.Embed(
@@ -201,7 +207,7 @@ class Tiss(commands.Cog):
             inline=False
         )
 
-        await ctx.send(embed=embed)
+        await interaction.followup.send(embed=embed)
 
 
 async def setup(bot):

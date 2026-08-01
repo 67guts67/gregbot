@@ -1,26 +1,80 @@
 import discord
 from discord.ext import commands
+from discord import app_commands
 
+from bot import bot
 
 class Info(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command(help="Reveal GregBot's creators.")
-    async def author(self, ctx):
-        await ctx.send('''My father is <@627465945522241555>\nMy mother is <@575710766787985435>''')
+    info = app_commands.Group(
+        name="info",
+        description="..."
+    )
 
-    @commands.command(help="Show information about GregBot.")
-    async def whoami(self, ctx):
-        await ctx.send(
-            f"Username: **{self.bot.user.name}#{self.bot.user.discriminator}**\n"
-            f"Display name: **{self.bot.user.display_name}**\n"
-            f"ID: **{self.bot.user.id}**"
+    def help_message(self):
+        commandList = [commandGroup for commandGroup in self.bot.tree.get_commands() if
+                       isinstance(commandGroup, app_commands.Group)]
+        embed = discord.Embed(title="Commands", color=discord.Color.blurple())
+        for iteration, group in enumerate(commandList):
+            embed.add_field(
+                name=f"Slash command category: {group.name}",
+                value=f"{
+                "\n\n".join([
+
+                    f" - {command.name}"
+
+                    f"\n> Description: {command.description}"
+
+                    f"{f"\n> Argument(s):\n{"\n".join([
+
+                        f"> - `{parameter.name}`: {parameter.description}" for parameter in command.parameters
+
+                    ])}" if len(command.parameters) > 0 else ""}"
+
+                    for command in group.commands])}\n\n{'-' * 85}\n",
+                inline=False
+            )
+
+        embed.add_field(
+            name=f"Non slash commands (can be invoked using the `{self.bot.command_prefix}` prefix)",
+            value=f"{"\n\n".join([
+
+                f" - {command.name}"
+
+                f"\n> Description: {command.help}"
+
+                for command in self.bot.commands])}"
         )
 
-    @commands.command(help="Display information about the current Discord server.")
-    async def serverinfo(self,ctx):
-        guild = ctx.guild
+        return embed
+
+    '''
+    @commands.command(name="help", help="Shows this message")
+    async def prefix_help(self, ctx: commands.Context):
+        await ctx.send(embed=self.help_message())
+    '''
+
+    @app_commands.command(name="help", description="Show commands")
+    async def slash_help(self, interaction: discord.Interaction):
+        await interaction.response.send_message(embed=self.help_message())
+
+    @info.command(name="whoami", description="Show information about GregBot.")
+    async def whoami(self, interaction: discord.Interaction):
+        await interaction.response.send_message(
+            f"Username: **{bot.user.name}#{bot.user.discriminator}**\n"
+            f"Display name: **{bot.user.display_name}**\n"
+            f"ID: **{bot.user.id}**"
+        )
+
+    @info.command(name="author", description="Reveal GregBot's creators.")
+    async def author(self, interaction: discord.Interaction):
+        await interaction.response.send_message('''My father is <@627465945522241555>\nMy mother is <@575710766787985435>''')
+
+    @info.command(name="serverinfo", description="Display information about the current Discord server.")
+    async def serverinfo(self, interaction: discord.Interaction):
+        guild = interaction.guild
 
         embed = discord.Embed(
             title=f"{guild.name}",
@@ -30,7 +84,7 @@ class Info(commands.Cog):
         if guild.icon:
             embed.set_thumbnail(url=guild.icon.url)
 
-        owner = await self.bot.fetch_user(guild.owner_id)
+        owner = await bot.fetch_user(guild.owner_id)
 
         embed.add_field(name="Owner", value=owner.name, inline=True)
         embed.add_field(name="Server ID", value=guild.id, inline=True)
@@ -52,10 +106,9 @@ class Info(commands.Cog):
         embed.add_field(name="Verification", value=str(guild.verification_level).title(), inline=True)
         embed.add_field(name="AFK Timeout", value=f"{guild.afk_timeout // 60} min", inline=True)
 
-        embed.set_footer(text=f"Requested by {ctx.author}", icon_url=ctx.author.display_avatar.url)
+        embed.set_footer(text=f"Requested by {interaction.user}", icon_url=interaction.user.display_avatar.url)
 
-        await ctx.send(embed=embed)
-
+        await interaction.response.send_message(embed=embed)
 
 async def setup(bot):
     await bot.add_cog(Info(bot))
