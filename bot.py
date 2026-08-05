@@ -15,13 +15,13 @@ class GregBot(commands.Bot):
         super().__init__(**kwargs)
         self.quote_cache = QuoteCache()
         self.http_session: aiohttp.ClientSession | None = None
-        self.add_check(self.only_me())
+       # self.add_check(self.only_me())
 
-    def only_me(self):
-        authors = [627465945522241555, 575710766787985435]
-        async def predicate(ctx):
-            return ctx.author.id in authors
-        return predicate
+    #def only_me(self):
+    #    authors = [627465945522241555, 575710766787985435]
+    #    async def predicate(ctx):
+    #        return ctx.author.id in authors
+    #    return predicate
 
     async def setup_hook(self):
         self.http_session = aiohttp.ClientSession(
@@ -50,8 +50,8 @@ intents.members = True
 
 
 bot = GregBot(
-    command_prefix="'",
+    command_prefix=";",
     intents=intents,
     help_command=None, # already uses slash command, instead of removing this line, please uncomment the prefix_help function in info.py
 )
-bot.token = os.getenv("TOKEN2")
+bot.token = os.getenv("TOKEN")
