@@ -49,15 +49,15 @@ class Fun(commands.Cog):
             content[:2000]
         )
 
-    @commands.command(help="Respond with 'Yes, this is real.'")
-    async def real(self, ctx):
-        await ctx.message.delete(delay=1)
-        await ctx.send('Yes, this is real.')
+    @fun.command(name="real", description="Respond with 'Yes, this is real.'")
+    async def real(self, interaction: discord.Interaction):
+        await interaction.response.send_message("Me when I lie:", ephemeral=True, delete_after=0)
+        await interaction.channel.send("Yes, this is real.")
 
-    @commands.command(help="Respond with 'Yes, this is fake.'")
-    async def fake(self, ctx):
-        await ctx.message.delete(delay=1)
-        await ctx.send('Yes, this is fake.')
+    @fun.command(name="fake", description="Respond with 'Yes, this is real.'")
+    async def fake(self, interaction: discord.Interaction):
+        await interaction.response.send_message("Me when I lie:", ephemeral=True, delete_after=0)
+        await interaction.channel.send("Yes, this is fake.")
 
 async def setup(bot):
     await bot.add_cog(Fun(bot))
