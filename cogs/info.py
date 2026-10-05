@@ -14,6 +14,7 @@ class Info(commands.Cog):
     )
 
     def help_message(self):
+        #TODO: add description to embed
         description = []
         commandList = [commandGroup for commandGroup in self.bot.tree.get_commands() if
                        isinstance(commandGroup, app_commands.Group)]
@@ -36,20 +37,20 @@ class Info(commands.Cog):
                     for command in group.commands])}\n\n{'-' * 85}\n"
 
             embed.add_field(
-                name=f"Slash command category: {group.name}",
+                name=name,
                 value=value,
                 inline=False
             )
 
-            description.append(f"{name}\n{value}")
+            #description.append(f"{name}\n{value}")
 
         if self.bot.commands:
-            name = f"Non slash commands (can be invoked using the `{self.bot.command_prefix}` prefix)"
+            name = f"\nNon slash commands (can be invoked using the `{self.bot.command_prefix}` prefix)"
             value = f"{"\n\n".join([
                     
                     f" - {command.name}"
                     f"\n> Description: {command.help}"
-                    f"\n> Usage: {command.usage}"
+                    f"\n> {self.bot.usage(command.usage)}"
                     
                     for command in self.bot.commands])}"
             embed.add_field(
@@ -58,7 +59,7 @@ class Info(commands.Cog):
                 inline=False
             )
 
-        embed.description = "\n\n\n".join(description)
+        #embed.description = "\n".join(description)
         return embed
 
     '''
