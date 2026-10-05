@@ -17,6 +17,9 @@ class GregBot(commands.Bot):
         self.http_session: aiohttp.ClientSession | None = None
         self.add_check(self.only_me())
 
+        # Sets pattern for Synopsis Message
+        self.usage = lambda x: f"Usage: {self.command_prefix}{x}"
+
     def only_me(self):
         authors = [627465945522241555, 575710766787985435]
         async def predicate(ctx):
