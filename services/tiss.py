@@ -9,6 +9,70 @@ from urllib.parse import quote
 from config import BASE_URL, PSEARCH
 from services.tiss_cache import tiss_cache
 
+from typing import TypedDict
+
+class CourseInfo(TypedDict):
+    """
+    Represents a Tiss course returned from the Tiss API.
+    Attributes
+    ---
+    courseNumber
+    semesterCode
+    courseType
+    title
+    lectures
+    objective
+    teachingContent
+    additionalInformation
+    lectureNotes
+    examinationModalities
+    recommendation
+    weeklyHours
+    registration
+    """
+    courseNumber: str
+    semesterCode: str
+    courseType: str
+    title: str
+    titleDe: str
+    lectures: list[str]
+    objective: str
+    teachingContent: str
+    additionalInformation: str
+    lectureNotes: str
+    examinationModalities: str
+    recommendation: str
+    weeklyHours: str
+    registration: str
+    language: str
+    url: str
+    institute: str
+
+class Person(TypedDict):
+    """
+    Represents a Tiss person returned from the Tiss API.
+    Attributes
+    ---
+    tiss_id
+    oid
+    first_name
+    last_name
+    """
+    tiss_id: str
+    oid: str
+    first_name: str
+    last_name: str
+
+@tiss_cache.cached(ttl=60 * 60 * 24, miss_ttl=60 * 5)
+async def tiss_oidsearch(session: aiohttp.ClientSession, oid) -> Person | None:
+    url = f"https://tiss.tuwien.ac.at/api/person/v23/oid/{oid}"
+
+    async with session.get(url) as response:
+        if response.status != 200:
+            return None
+        data = await response.json()
+
+    return data
 
 @tiss_cache.cached(ttl=60 * 60 * 24, miss_ttl=60 * 5)
 async def tiss_psearch(session: aiohttp.ClientSession, name: str):
@@ -21,7 +85,6 @@ async def tiss_psearch(session: aiohttp.ClientSession, name: str):
 
     results = data.get("results", [])
     return results[0] if results else None
-
 
 @tiss_cache.cached(ttl=60 * 60 * 24, miss_ttl=60 * 5)
 async def tiss_csearch(session: aiohttp.ClientSession, oid: int, semester: str) -> list[dict]:
@@ -55,9 +118,17 @@ async def tiss_csearch(session: aiohttp.ClientSession, oid: int, semester: str) 
 
     return courses
 
-
 @tiss_cache.cached(ttl=60 * 60 * 24, miss_ttl=60 * 5)
-async def tiss_course(session: aiohttp.ClientSession, number: str, semester: str) -> dict | None:
+async def tiss_course(session: aiohttp.ClientSession, name: str) -> dict[str, CourseInfo]:
+    matches = {}
+    courses: dict[str, CourseInfo] = await tiss_courses(session)
+    for cNr, course in courses.items():
+        if course["title"] == name or course["titleDe"] == name:
+            matches[cNr] = course
+
+    return matches
+
+    '''
     url = f"https://tiss.tuwien.ac.at/api/course/{number}-{semester}"
 
     async with session.get(url) as response:
@@ -88,7 +159,7 @@ async def tiss_course(session: aiohttp.ClientSession, number: str, semester: str
         "institute": course.findtext("{*}instituteName/{*}en", default="N/A"),
         "language": course.findtext("{*}language/{*}en", default="N/A"),
     }
-
+    '''
 
 @tiss_cache.cached(ttl=60 * 60 * 24, miss_ttl=60 * 5)
 async def tiss_exam_dates(session: aiohttp.ClientSession, number: str) -> list[dict]:
@@ -118,6 +189,75 @@ async def tiss_exam_dates(session: aiohttp.ClientSession, number: str) -> list[d
 
     return exams
 
+@tiss_cache.cached(ttl=60 * 60 * 24, miss_ttl=60 * 5)
+async def tiss_orgs(session: aiohttp.ClientSession) -> list[str]:
+    def findIns(item) -> list[str]:
+        if item.get("type") == "INS":
+            return [item.get("code")]
+        codes: list[str] = []
+        if "children" in item:
+            for child in item.get("children"):
+                codes += findIns(child)
+        return codes
+
+    url = f"https://tiss.tuwien.ac.at/api/orgunit/v23/organigramm"
+
+    async with session.get(url) as response:
+        if response.status != 200:
+            print(response)
+        body = await response.json()
+
+    return findIns(body)
+
+@tiss_cache.cached(ttl=60 * 60 * 24, miss_ttl=60 * 5)
+async def tiss_courses(session: aiohttp.ClientSession) -> dict[str, CourseInfo]:
+    print("Fetching orgs", flush=True)
+    orgs = await tiss_orgs(session)
+    print(f"Fetched {len(orgs)} orgs\n\n", flush=True)
+
+    coursesDict: dict[str, CourseInfo] = {}
+
+    courseCount = 0
+
+    for iteration, org in enumerate(orgs):
+        orgUrl = f"https://tiss.tuwien.ac.at/api/course/orgUnit/{org}"
+
+        print(f"Fetching {orgUrl}", flush=True)
+        async with session.get(orgUrl) as response:
+            if response.status != 200:
+                print(response, flush=True)
+            courses = await response.text()
+
+        print(f"Fetched {orgUrl} ({iteration + 1}/{len(orgs)})", flush=True)
+
+        root = ET.fromstring(courses)
+
+        for course in root.findall("{*}course"):
+            cNr = course.findtext("{*}courseNumber")
+            if cNr:
+                coursesDict[cNr] = {
+                    "courseNumber": course.findtext("{*}courseNumber", default = "N/A"),
+                    "semesterCode": course.findtext("{*}semesterCode", default = "N/A"),
+                    "courseType": course.findtext("{*}courseType", default = "N/A"),
+                    "title": course.findtext("{*}title/{*}en", default = "N/A"),
+                    "titleDe": course.findtext("{*}title/{*}de", default = "N/A"),
+                    "lectures": [lecturers.text for lecturers in course.findall("{*}lecturers/{*}oid") if lecturers.text is not None],
+                    "objective": course.findtext("{*}objective/{*}en", default = "N/A"),
+                    "teachingContent": course.findtext("{*}teachingContent/{*}en", default = "N/A"),
+                    "additionalInformation": course.findtext("{*}additionalInformation/{*}en", default = "N/A"),
+                    "lectureNotes": course.findtext("{*}lectureNotes/{*}en", default = "N/A"),
+                    "examinationModalities": course.findtext("{*}examinationModalities/{*}en", default = "N/A"),
+                    "recommendation": course.findtext("{*}related/{*}recommendation/{*}en", default = "N/A"),
+                    "weeklyHours": course.findtext("{*}weeklyHours", default = "N/A"),
+                    "registration": course.findtext("{*}registration", default = "N/A"),
+                    "language": course.findtext("{*}language", default = "N/A"),
+                    "url": course.findtext("{*}url", default = "N/A"),
+                    "institute": course.findtext("{*}instituteCode", default = "N/A")
+                }
+
+        print(f"{len(coursesDict.keys()) - courseCount} courses cached.", flush=True)
+
+    return coursesDict
 
 def format_exam_date(iso_str: str) -> str:
     if not iso_str or iso_str == "N/A":
