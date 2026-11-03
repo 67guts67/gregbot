@@ -11,6 +11,10 @@ from services.tiss_cache import tiss_cache
 
 from typing import TypedDict
 
+class Languages(TypedDict):
+    german: str
+    english: str
+
 class CourseInfo(TypedDict):
     """
     Represents a Tiss course returned from the Tiss API.
@@ -29,24 +33,27 @@ class CourseInfo(TypedDict):
     recommendation
     weeklyHours
     registration
+    url
+    institute
+    instituteCode
     """
     courseNumber: str
     semesterCode: str
     courseType: str
-    title: str
-    titleDe: str
+    title: Languages
     lectures: list[str]
-    objective: str
-    teachingContent: str
-    additionalInformation: str
-    lectureNotes: str
-    examinationModalities: str
-    recommendation: str
+    objective: Languages
+    teachingContent: Languages
+    additionalInformation: Languages
+    lectureNotes: Languages
+    examinationModalities: Languages
+    recommendation: Languages
     weeklyHours: str
     registration: str
     language: str
     url: str
-    institute: str
+    institute: Languages
+    instituteCode: str
 
 class Person(TypedDict):
     """
@@ -123,7 +130,7 @@ async def tiss_course(session: aiohttp.ClientSession, name: str) -> dict[str, Co
     matches = {}
     courses: dict[str, CourseInfo] = await tiss_courses(session)
     for cNr, course in courses.items():
-        if course["title"] == name or course["titleDe"] == name:
+        if course["title"].get("english") == name or course["title"].get("german") == name:
             matches[cNr] = course
 
     return matches
@@ -239,20 +246,28 @@ async def tiss_courses(session: aiohttp.ClientSession) -> dict[str, CourseInfo]:
                     "courseNumber": course.findtext("{*}courseNumber", default = "N/A"),
                     "semesterCode": course.findtext("{*}semesterCode", default = "N/A"),
                     "courseType": course.findtext("{*}courseType", default = "N/A"),
-                    "title": course.findtext("{*}title/{*}en", default = "N/A"),
-                    "titleDe": course.findtext("{*}title/{*}de", default = "N/A"),
+                    "title": {"german": course.findtext("{*}title/{*}de", default = "N/A"),
+                              "english": course.findtext("{*}title/{*}en", default = "N/A")},
                     "lectures": [lecturers.text for lecturers in course.findall("{*}lecturers/{*}oid") if lecturers.text is not None],
-                    "objective": course.findtext("{*}objective/{*}en", default = "N/A"),
-                    "teachingContent": course.findtext("{*}teachingContent/{*}en", default = "N/A"),
-                    "additionalInformation": course.findtext("{*}additionalInformation/{*}en", default = "N/A"),
-                    "lectureNotes": course.findtext("{*}lectureNotes/{*}en", default = "N/A"),
-                    "examinationModalities": course.findtext("{*}examinationModalities/{*}en", default = "N/A"),
-                    "recommendation": course.findtext("{*}related/{*}recommendation/{*}en", default = "N/A"),
+                    "objective": {"german": course.findtext("{*}objective/{*}de", default = "N/A"),
+                                "english": course.findtext("{*}objective/{*}en", default = "N/A")},
+                    "teachingContent": {"german": course.findtext("{*}teachingContent/{*}de", default = "N/A"),
+                                        "english": course.findtext("{*}teachingContent/{*}en", default = "N/A")},
+                    "additionalInformation": {"german": course.findtext("{*}additionalInformation/{*}de", default = "N/A"),
+                                              "english": course.findtext("{*}additionalInformation/{*}en", default = "N/A")},
+                    "lectureNotes": {"german": course.findtext("{*}lectureNotes/{*}de", default = "N/A"),
+                                     "english": course.findtext("{*}lectureNotes/{*}en", default = "N/A")},
+                    "examinationModalities": {"german": course.findtext("{*}examinationModalities/{*}de", default = "N/A"),
+                                              "english": course.findtext("{*}examinationModalities/{*}en", default = "N/A")},
+                    "recommendation": {"german": course.findtext("{*}related/{*}recommendation/{*}de", default = "N/A"),
+                                       "english": course.findtext("{*}related/{*}recommendation/{*}en", default = "N/A")},
                     "weeklyHours": course.findtext("{*}weeklyHours", default = "N/A"),
                     "registration": course.findtext("{*}registration", default = "N/A"),
                     "language": course.findtext("{*}language", default = "N/A"),
                     "url": course.findtext("{*}url", default = "N/A"),
-                    "institute": course.findtext("{*}instituteCode", default = "N/A")
+                    "institute": {"german": course.findtext("{*}instituteName/{*}en", default = "N/A"),
+                                  "english": course.findtext("{*}instituteName/{*}en", default = "N/A")},
+                    "instituteCode": course.findtext("{*}instituteCode", default = "N/A")
                 }
 
         print(f"{len(coursesDict.keys()) - courseCount} courses cached.", flush=True)
