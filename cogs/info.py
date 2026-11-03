@@ -14,13 +14,14 @@ class Info(commands.Cog):
     )
 
     def help_message(self):
+        #TODO: add description to embed
+        description = []
         commandList = [commandGroup for commandGroup in self.bot.tree.get_commands() if
                        isinstance(commandGroup, app_commands.Group)]
         embed = discord.Embed(title="Commands", color=discord.Color.blurple())
         for iteration, group in enumerate(commandList):
-            embed.add_field(
-                name=f"Slash command category: {group.name}",
-                value=f"{
+            name = f"Slash command category: {group.name}"
+            value = f"{
                 "\n\n".join([
 
                     f" - {command.name}"
@@ -33,21 +34,32 @@ class Info(commands.Cog):
 
                     ])}" if len(command.parameters) > 0 else ""}"
 
-                    for command in group.commands])}\n\n{'-' * 85}\n",
+                    for command in group.commands])}\n\n{'-' * 85}\n"
+
+            embed.add_field(
+                name=name,
+                value=value,
                 inline=False
             )
 
-        embed.add_field(
-            name=f"Non slash commands (can be invoked using the `{self.bot.command_prefix}` prefix)",
-            value=f"{"\n\n".join([
+            #description.append(f"{name}\n{value}")
 
-                f" - {command.name}"
+        if self.bot.commands:
+            name = f"\nNon slash commands (can be invoked using the `{self.bot.command_prefix}` prefix)"
+            value = f"{"\n\n".join([
+                    
+                    f" - {command.name}"
+                    f"\n> Description: {command.help}"
+                    f"\n> {self.bot.usage(command.usage)}"
+                    
+                    for command in self.bot.commands])}"
+            embed.add_field(
+                name=name,
+                value=value,
+                inline=False
+            )
 
-                f"\n> Description: {command.help}"
-
-                for command in self.bot.commands])}"
-        )
-
+        #embed.description = "\n".join(description)
         return embed
 
     '''

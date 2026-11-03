@@ -5,17 +5,15 @@ import asyncio
 from services.gemini import ask_gemini
 
 class Ai(commands.Cog):
-
     def __init__(self, bot):
         self.bot = bot
 
-
-    @commands.command(help="Ask GregBot a question using Gemini AI.")
+    @commands.command(usage="ai <question>", help="Ask GregBot a question using Gemini AI.")
     async def ai(self, ctx, *, prompt=None):
 
         if not prompt:
             return await ctx.send(
-                "Usage: ^ai <question>"
+                self.bot.usage(self.ai.usage)
             )
 
         replied_message = None
@@ -39,7 +37,6 @@ class Ai(commands.Cog):
         """
         try:
             async with ctx.typing():
-
                 answer = await asyncio.to_thread(
                     ask_gemini,
                     PROMPT
@@ -51,7 +48,7 @@ class Ai(commands.Cog):
                 everyone=False,
             )
 
-            await ctx.send(
+            await ctx.reply(
                 answer[:2000],
                 allowed_mentions=allowed_mentions,
             )
