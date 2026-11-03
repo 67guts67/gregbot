@@ -57,4 +57,4 @@ bot = GregBot(
     intents=intents,
     help_command=None, # already uses slash command, instead of removing this line, please uncomment the prefix_help function in info.py
 )
-bot.token = os.getenv("TOKEN2")
+bot.token = os.getenv("TOKEN")
