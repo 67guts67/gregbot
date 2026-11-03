@@ -1,5 +1,4 @@
-import asyncio
-
+import aiohttp
 import discord
 from discord.ext import commands
 from discord import app_commands
@@ -7,8 +6,169 @@ from discord import app_commands
 from config import SEMESTER_MATCH
 
 from services.tiss import tiss_psearch, clean_html, tiss_csearch, build_picture_url, tiss_course, \
-    tiss_exam_dates, format_exam_block, truncate
+    tiss_exam_dates, format_exam_block, truncate, CourseInfo, tiss_courses, tiss_oidsearch
 
+from markdownify import markdownify as md
+
+class LanguageButton(discord.ui.Button):
+    def __init__(self, language, label, menu: CourseMenu):
+        self.menu = menu
+        self.language = language
+        super().__init__(label=label)
+
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+        await self.menu.updateLanguage(self.language, interaction)
+
+class DeleteButton(discord.ui.Button):
+    def __init__(self, language: str):
+        label = "Delete" if language == "english" else "Löschen"
+        super().__init__(label=label, style=discord.ButtonStyle.danger)
+
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+        try:
+            await interaction.delete_original_response()
+        except Exception as e:
+            print(e, flush=True)
+
+class CourseSelector(discord.ui.Select):
+    def __init__(self, courses: dict[str, CourseInfo], language: str, menu: CourseMenu):
+        self.courses = courses
+        self.menu = menu
+        options = [
+            discord.SelectOption(label=f"{course["title"][language]} {course["courseType"]} {course["semesterCode"]}",
+                                 value=course["courseNumber"])
+            for key, course in courses.items()
+        ]
+
+        super().__init__(
+            placeholder="Please select a course",
+            min_values=1,
+            max_values=1,
+            options=options
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+        await self.menu.updateCourse(self.values[0], interaction)
+
+class CourseMenu:
+    def __init__(self, courses: dict[str, CourseInfo], session: aiohttp.ClientSession):
+        super().__init__()
+        self.language = "english"
+        self.course: CourseInfo | None = None
+        self.courses: dict[str, CourseInfo] = courses
+        self.session = session
+
+        if len(list(courses.keys())) == 1:
+            self.course = courses.pop(list(courses.keys())[0])
+
+    async def updateCourse(self, key: str, interaction: discord.Interaction):
+        self.course = self.courses.get(key)
+        await self.updateEmbed(interaction, True)
+
+    async def updateLanguage(self, language: str, interaction: discord.Interaction):
+        self.language = language
+        await self.updateEmbed(interaction, True)
+
+    async def updateEmbed(self, interaction: discord.Interaction, edit: bool):
+        menu = discord.ui.View(timeout=60.0)
+        if len(list(self.courses.keys())) > 1:
+            menu.add_item(CourseSelector(self.courses, self.language, menu=self))
+        menu.add_item(LanguageButton(language="german",
+                                     label={"english": "German", "german": "Deutsch"}.get(self.language),
+                                     menu=self))
+        menu.add_item(LanguageButton(language="english",
+                                     label={"english": "English", "german": "Englisch"}.get(self.language),
+                                     menu=self))
+        menu.add_item(DeleteButton(language=self.language))
+
+        if self.course:
+            embed = await courseEmbed(self.session, self.course, self.language)
+            await interaction.edit_original_response(embed=embed, view=menu)
+        else:
+            if edit:
+                await interaction.edit_original_response(view=menu)
+            else:
+                await interaction.followup.send(view=menu)
+
+        return None
+
+async def courseEmbed(session: aiohttp.ClientSession, course_info: CourseInfo, language: str):
+    exam_dates = await tiss_exam_dates(session, course_info["courseNumber"])
+
+    embed = discord.Embed(
+        title=course_info["title"][language],
+        url=course_info["url"] if course_info["url"] != "N/A" else None,
+        description=(
+            f"`{course_info['courseNumber']}` · **{course_info['courseType']}** · "
+            f"{course_info['weeklyHours']}h/week · {course_info['language']} · "
+            f"{course_info['semesterCode']}"
+        ),
+        color=discord.Color.red()
+    )
+
+    embed.add_field(name="Institute", value=f"[{course_info["institute"][language]}](https://tiss.tuwien.ac.at/adressbuch/adressbuch/orgeinheit_via_nummer/{course_info["instituteCode"]})", inline=True)
+    embed.add_field(name="Registration", value=course_info["registration"], inline=True)
+    embed.add_field(name="\u200b", value="\u200b", inline=True)
+
+    if course_info["objective"]:
+        embed.add_field(
+            name="Objective",
+            value=truncate(md(course_info["objective"][language].replace("}{TU Maps}", "")), 1024),
+            inline=False
+        )
+
+    if course_info["examinationModalities"]:
+        embed.add_field(
+            name="Examination Modalities",
+            value=truncate(md(course_info["examinationModalities"][language].replace("}{TU Maps}", "")), 1024),
+            inline=False
+        )
+
+    if course_info["additionalInformation"]:
+        embed.add_field(
+            name="Additional Information",
+            value=truncate(md(course_info["additionalInformation"][language].replace("}{TU Maps}", "")), 1024),
+            inline=False
+        )
+
+    if course_info["lectures"]:
+        lectures = ""
+        endOfList = "\n - ..."
+        addEnd = False
+        for iteration, lecturer in enumerate(course_info["lectures"]):
+            person = await tiss_oidsearch(session, lecturer)
+            if person:
+                newLectures = f"\n - [{person.get("first_name")} {person.get("last_name")}](https://tiss.tuwien.ac.at/adressbuch/adressbuch/person/{person.get("tiss_id")})"
+                if len(lectures) + len(lecturer) > 1024:
+                    addEnd = True
+                    continue
+                elif len(lectures) + len(lecturer) > 1024 - len(endOfList) and iteration < len(
+                        course_info["lectures"]) - 1:
+                    addEnd = True
+                    continue
+                else:
+                    lectures += newLectures
+
+        if addEnd:
+            lectures += endOfList
+
+        embed.add_field(
+            name="Lecture(s)",
+            value=lectures,
+            inline=False
+        )
+
+    if exam_dates:
+        embed.add_field(
+            name="Exam Dates",
+            value=format_exam_block(exam_dates),
+            inline=False
+        )
+
+    return embed
 
 class Tiss(commands.Cog):
     def __init__(self, bot):
@@ -154,61 +314,30 @@ class Tiss(commands.Cog):
         await interaction.followup.send(embed=embed)
 
     @tiss.command(name="course", description="Get course details and exam dates.")
-    @app_commands.describe(number="The course number - Example: 192134")
-    @app_commands.describe(semester="The semester - Example: 2026W")
-    async def course(self, interaction: discord.Interaction, number: str, semester: str):
-        if not SEMESTER_MATCH.match(semester):
-            await interaction.response.send_message("Invalid semester.")
-            return
-
+    @app_commands.describe(name="The name of the course - Example: Einführung in die Programmierung 1")
+    async def course(self, interaction: discord.Interaction, name: str):
         await interaction.response.defer()
 
-        course_info, exam_dates = await asyncio.gather(
-            tiss_course(self.bot.http_session, number, semester),
-            tiss_exam_dates(self.bot.http_session, number),
-        )
+        matches: dict[str, CourseInfo] = await tiss_course(self.bot.http_session, name)
 
-        if course_info is None:
-            await interaction.followup.send(f"No course found for `{number}` in semester `{semester}`.")
-            return
+        print(f"Number of matches: {len(matches.keys())}", flush=True)
 
-        embed = discord.Embed(
-            title=course_info["title"],
-            url=course_info["url"] if course_info["url"] != "N/A" else None,
-            description=(
-                f"`{course_info['number']}` · **{course_info['type']}** · "
-                f"{course_info['hours']}h/week · {course_info['language']} · "
-                f"{semester}"
-            ),
-            color=discord.Color.red()
-        )
+        if len(matches.keys()) >= 1:
+            try:
+                courseMenu = CourseMenu(matches, self.bot.http_session)
+                await courseMenu.updateEmbed(interaction, False)
 
-        embed.add_field(name="Institute", value=course_info["institute"], inline=True)
-        embed.add_field(name="Registration", value=course_info["registration"], inline=True)
-        embed.add_field(name="\u200b", value="\u200b", inline=True)
+            except Exception as e:
+                print(e, flush=True)
 
-        if course_info["objective"]:
-            embed.add_field(
-                name="Objective",
-                value=truncate(course_info["objective"], 500),
-                inline=False
-            )
+        else:
+            await interaction.followup.send("No course has been found")
 
-        if course_info["examination_modalities"]:
-            embed.add_field(
-                name="Examination Modalities",
-                value=truncate(course_info["examination_modalities"], 500),
-                inline=False
-            )
-
-        embed.add_field(
-            name="Exam Dates",
-            value=format_exam_block(exam_dates),
-            inline=False
-        )
-
-        await interaction.followup.send(embed=embed)
-
+    @tiss.command(name="cache", description="Fetches all courses if not already cached.")
+    async def cache(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        courses = await tiss_courses(self.bot.http_session)
+        await interaction.followup.send(f"{len(courses.keys())} courses cached.")
 
 async def setup(bot):
     await bot.add_cog(Tiss(bot))
