@@ -15,16 +15,9 @@ class GregBot(commands.Bot):
         super().__init__(**kwargs)
         self.quote_cache = QuoteCache()
         self.http_session: aiohttp.ClientSession | None = None
-        self.add_check(self.only_me())
 
         # Sets pattern for Synopsis Message
         self.usage = lambda x: f"Usage: {self.command_prefix}{x}"
-
-    def only_me(self):
-        authors = [627465945522241555, 575710766787985435]
-        async def predicate(ctx):
-            return ctx.author.id in authors
-        return predicate
 
     async def setup_hook(self):
         self.http_session = aiohttp.ClientSession(
