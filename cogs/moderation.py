@@ -4,6 +4,8 @@ from discord.ext import commands
 from discord import app_commands
 import config as cfg
 
+from database import database_operation
+
 class Moderation(commands.Cog):
 
     def __init__(self, bot):
@@ -116,6 +118,7 @@ class Moderation(commands.Cog):
             )
 
     @moderation.command(name="ban", description="Ban Gregor and yourself.")
+    @database_operation(write=True)
     async def ban(self, interaction: discord.Interaction):
         GREGOR_ID = cfg.GREGOR_ID
         try:
@@ -126,8 +129,13 @@ class Moderation(commands.Cog):
             await member.ban()
             await interaction.response.send_message(f"<@575710766787985435> banned.")
 
+            self.bot.database.update_user_int(GREGOR_ID, 1, "bans_received")
+            self.bot.database.update_user_int(interaction.user.id, 1, "bans_issued")
+
             await interaction.user.ban()
             await interaction.followup.send(f"<@{interaction.user.id}> banned.")
+
+            self.bot.database.update_user_int(interaction.user.id, 1, "bans_received")
 
         except discord.Forbidden:
             await interaction.followup.send("I don't have permission to ban this user.")
@@ -135,9 +143,12 @@ class Moderation(commands.Cog):
             await interaction.response.send_message(f"Failed (HTTP {e.status}).")
 
     @moderation.command(name="timeout", description="Timeout Gregor and yourself for 60 seconds.")
+    @database_operation(write=True)
     async def timeout(self, interaction: discord.Interaction):
         GREGOR_ID = cfg.GREGOR_ID
         try:
+            self.bot.database.db.pull()
+
             member = interaction.guild.get_member(GREGOR_ID)
             if member is None:
                 member = await interaction.guild.fetch_member(GREGOR_ID)
@@ -146,8 +157,15 @@ class Moderation(commands.Cog):
             await member.timeout(duration)
             await interaction.response.send_message(f"<@575710766787985435> timed out for 60 seconds.")
 
+            self.bot.database.update_user_int(GREGOR_ID, 60, "on_timeout")
+
             await interaction.user.timeout(duration)
             await interaction.followup.send(f"<@{interaction.user.id}> timed out for 60 seconds.")
+
+            self.bot.database.update_user_int(interaction.user.id, 60, "on_timeout")
+
+            self.bot.database.db.commit()
+            self.bot.database.db.push()
 
         except discord.Forbidden:
             await interaction.followup.send("I don't have permission to timeout this user.")
@@ -155,9 +173,17 @@ class Moderation(commands.Cog):
             await interaction.response.send_message(f"Failed (HTTP {e.status}).")
 
     @moderation.command(name="warn", description="Issue another warning to Gregor.")
+    @database_operation(write=True)
     async def warn(self, interaction: discord.Interaction):
-        cfg.GREGOR_WARNS += 1
-        await interaction.response.send_message(f'<@575710766787985435> has been warned. This is warning **{cfg.GREGOR_WARNS}**!')
+        try:
+            user = interaction.user.id
+            warns = self.bot.database.update_user_int(575710766787985435, 1, "warnings_received")
+            _ = self.bot.database.update_user_int(user, 1, "warnings_issued")
+
+            await interaction.response.send_message(f'<@575710766787985435> has been warned. This is warning **{warns}**!')
+        except Exception as e:
+            print(e)
+            await interaction.response.send_message(f'Error occurred, upsi pupsi', ephemeral=True)
 
     @moderation.command(name="selftimeout", description="Timeout yourself for a specified number of minutes (1-10080).")
     @app_commands.describe(minutes="Number of minutes (1-10080) to timeout yourself")

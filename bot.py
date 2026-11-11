@@ -7,6 +7,8 @@ from dotenv import load_dotenv
 from services.quote_cache import QuoteCache
 from services.tiss_cache import tiss_cache
 
+from services.database import Database
+
 load_dotenv("secrets.env")
 
 class GregBot(commands.Bot):
@@ -15,16 +17,11 @@ class GregBot(commands.Bot):
         super().__init__(**kwargs)
         self.quote_cache = QuoteCache()
         self.http_session: aiohttp.ClientSession | None = None
-        self.add_check(self.only_me())
+
+        self.database = Database()
 
         # Sets pattern for Synopsis Message
         self.usage = lambda x: f"Usage: {self.command_prefix}{x}"
-
-    def only_me(self):
-        authors = [627465945522241555, 575710766787985435]
-        async def predicate(ctx):
-            return ctx.author.id in authors
-        return predicate
 
     async def setup_hook(self):
         self.http_session = aiohttp.ClientSession(
@@ -46,6 +43,20 @@ class GregBot(commands.Bot):
         for extension in extensions:
             await self.load_extension(extension)
 
+    async def close(self):
+        try:
+            if self.http_session and not self.http_session.closed:
+                await self.http_session.close()
+                print("Closed HTTP session")
+
+        finally:
+            try:
+                if self.database:
+                    self.database.close()
+                    print("Closed Database connection")
+
+            finally:
+                await super().close()
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -57,4 +68,4 @@ bot = GregBot(
     intents=intents,
     help_command=None, # already uses slash command, instead of removing this line, please uncomment the prefix_help function in info.py
 )
-bot.token = os.getenv("TOKEN2")
+bot.token = os.getenv("TOKEN")
