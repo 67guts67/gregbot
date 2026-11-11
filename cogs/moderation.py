@@ -4,7 +4,7 @@ from discord.ext import commands
 from discord import app_commands
 import config as cfg
 
-from database import database_operation
+from services.database import database_operation
 
 class Moderation(commands.Cog):
 
