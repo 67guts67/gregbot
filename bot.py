@@ -7,6 +7,8 @@ from dotenv import load_dotenv
 from services.quote_cache import QuoteCache
 from services.tiss_cache import tiss_cache
 
+from database import Database
+
 load_dotenv("secrets.env")
 
 class GregBot(commands.Bot):
@@ -15,6 +17,7 @@ class GregBot(commands.Bot):
         super().__init__(**kwargs)
         self.quote_cache = QuoteCache()
         self.http_session: aiohttp.ClientSession | None = None
+        self.database = Database()
 
         # Sets pattern for Synopsis Message
         self.usage = lambda x: f"Usage: {self.command_prefix}{x}"
