@@ -5,6 +5,7 @@ from functools import wraps
 from inspect import iscoroutinefunction
 
 load_dotenv("secrets.env")
+DB_DIR = "database"
 
 def database_operation(write=False):
     def decorator(func):
@@ -49,8 +50,9 @@ def database_operation(write=False):
 
 class Database:
     def __init__(self):
+        os.makedirs(DB_DIR, exist_ok=True)
         self.db = turso.sync.connect(
-            "./services/database/gregbot.db",
+            os.path.join(DB_DIR, "gregbot.db"),
             remote_url=os.getenv("TURSO_DATABASE_URL"),
             auth_token=os.getenv("TURSO_AUTH_TOKEN"),
         )
@@ -165,5 +167,3 @@ class Database:
 
     def get_quote(self) -> str:
         return self.db.execute("SELECT * FROM quotes ORDER BY random() LIMIT 1").fetchone()[0]
-
-database = Database()
