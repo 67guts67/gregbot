@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 from services.quote_cache import QuoteCache
 from services.tiss_cache import tiss_cache
 
-from database import Database
+from services.database import Database
 
 load_dotenv("secrets.env")
 
